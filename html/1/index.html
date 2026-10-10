@@ -1,0 +1,251 @@
+<?php
+// Устанавливаем правильный Content-Type, хотя браузер обычно справляется сам
+header('Content-Type: text/html; charset=utf-8');
+?>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Змейка (Snake Game)</title>
+    <style>
+        /* --- CSS Стилизация --- */
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #222;
+            color: #eee;
+            font-family: Arial, sans-serif;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        #gameCanvas {
+            border: 5px solid #00cc44;
+            background-color: #111;
+            box-shadow: 0 0 20px rgba(0, 204, 68, 0.5);
+        }
+
+        #scoreBoard {
+            margin-top: 15px;
+            font-size: 1.2em;
+        }
+
+        /* Стили для остановки/начала игры */
+        .hidden {
+            display: none !important;
+        }
+
+        #gameOverScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 10;
+            border: 3px solid red;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Классическая Змейка</h1>
+    
+    <div id="gameOverScreen" class="hidden">
+        <h2>Игра Окончена!</h2>
+        <p>Ваш счет: <span id="finalScore">0</span></p>
+        <button onclick="startGame()">Начать заново</button>
+    </div>
+
+    <canvas id="gameCanvas" width="400" height="400"></canvas>
+    
+    <div id="scoreBoard">
+        Счет: <span id="currentScore">0</span>
+    </div>
+
+    <script>
+        // --- JavaScript Логика Игры ---
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('currentScore');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const finalScoreDisplay = document.getElementById('finalScore');
+
+        // Константы игры
+        const TILE_SIZE = 20; // Размер одного блока (20x20 пикселей)
+        const GRID_SIZE = canvas.width / TILE_SIZE; // Сетка 20x20
+        
+        let snake;
+        let food;
+        let dx = TILE_SIZE; // Начальное направление (вправо)
+        let dy = 0;
+        let score = 0;
+        let gameLoopInterval;
+        let gameSpeed = 150; // Начальная скорость (мс)
+
+        // 1. Инициализация игры
+        function startGame() {
+            // Сброс состояния
+            snake = [{ x: 10 * TILE_SIZE, y: 10 * TILE_SIZE }]; // Змейка в центре
+            dx = TILE_SIZE;
+            dy = 0;
+            score = 0;
+            scoreDisplay.textContent = score;
+            gameOverScreen.classList.add('hidden');
+
+            // Очистка предыдущего интервала, если он был запущен
+            if (gameLoopInterval) {
+                clearInterval(gameLoopInterval);
+            }
+
+            placeFood();
+            
+            // Запуск основного игрового цикла
+            gameLoopInterval = setInterval(gameLoop, gameSpeed);
+        }
+
+        // 2. Размещение еды в случайном месте
+        function placeFood() {
+            let newFoodX, newFoodY;
+            do {
+                // Случайная позиция в сетке, умноженная на размер тайла
+                newFoodX = Math.floor(Math.random() * GRID_SIZE) * TILE_SIZE;
+                newFoodY = Math.floor(Math.random() * GRID_SIZE) * TILE_SIZE;
+            } while (isFoodOnSnake(newFoodX, newFoodY)); // Пока еда не появится на змейке
+            
+            food = { x: newFoodX, y: newFoodY };
+        }
+
+        function isFoodOnSnake(x, y) {
+            return snake.some(segment => segment.x === x && segment.y === y);
+        }
+
+
+        // 3. Основной игровой цикл
+        function gameLoop() {
+            moveSnake();
+
+            // Проверка на столкновение со стеной
+            if (checkWallCollision(snake[0])) {
+                endGame();
+                return;
+            }
+
+            // Проверка на столкновение с собой
+            if (checkSelfCollision(snake[0], snake)) {
+                endGame();
+                return;
+            }
+
+            // Проверка на поедание еды
+            if (snake[0].x === food.x && snake[0].y === food.y) {
+                score++;
+                scoreDisplay.textContent = score;
+                placeFood();
+                // Не удаляем последний хвост, тем самым увеличивая змейку
+            } else {
+                // Если еда не съедена, удаляем последний сегмент (имитация движения)
+                snake.pop();
+            }
+
+            drawGame();
+        }
+
+        // 4. Перемещение змейки
+        function moveSnake() {
+            const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+            // Добавляем новую голову в начало массива
+            snake.unshift(head);
+        }
+
+        // 5. Отрисовка
+        function drawGame() {
+            // Очищаем холст
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Рисуем еду (красный квадрат)
+            ctx.fillStyle = 'red';
+            ctx.fillRect(food.x, food.y, TILE_SIZE, TILE_SIZE);
+
+            // Рисуем змейку
+            snake.forEach((segment, index) => {
+                // Голова змейки - ярко-зеленая
+                if (index === 0) {
+                    ctx.fillStyle = '#00ff00';
+                } else {
+                    // Тело - зеленый
+                    ctx.fillStyle = '#00cc44';
+                }
+                ctx.fillRect(segment.x, segment.y, TILE_SIZE, TILE_SIZE);
+                // Добавим небольшой контур для сегментов
+                ctx.strokeStyle = '#111';
+                ctx.strokeRect(segment.x, segment.y, TILE_SIZE, TILE_SIZE);
+            });
+        }
+
+        // 6. Проверки коллизий
+        function checkWallCollision(head) {
+            return head.x < 0 || head.x >= canvas.width || head.y < 0 || head.y >= canvas.height;
+        }
+
+        function checkSelfCollision(head, snakeBody) {
+            // Начинаем проверку со второго элемента (тела), так как голова столкнуться с собой не может в этом кадре
+            for (let i = 1; i < snakeBody.length; i++) {
+                if (head.x === snakeBody[i].x && head.y === snakeBody[i].y) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // 7. Конец игры
+        function endGame() {
+            clearInterval(gameLoopInterval);
+            finalScoreDisplay.textContent = score;
+            gameOverScreen.classList.remove('hidden');
+        }
+
+
+        // 8. Обработчик клавиш для управления
+        document.addEventListener('keydown', e => {
+            // Предотвращаем мгновенный разворот на 180 градусов
+            const movingHorizontal = (dx !== 0);
+            const movingVertical = (dy !== 0);
+
+            switch (e.key) {
+                case 'ArrowUp':
+                case 'w':
+                    if (!movingVertical) { dx = 0; dy = -TILE_SIZE; }
+                    break;
+                case 'ArrowDown':
+                case 's':
+                    if (!movingVertical) { dx = 0; dy = TILE_SIZE; }
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                    if (!movingHorizontal) { dx = -TILE_SIZE; dy = 0; }
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                    if (!movingHorizontal) { dx = TILE_SIZE; dy = 0; }
+                    break;
+            }
+        });
+
+        // Начать игру при загрузке страницы
+        startGame();
+
+    </script>
+</body>
+</html>
